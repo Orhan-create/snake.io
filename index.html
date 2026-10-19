@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Snake.io Classic</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body, html { width: 100%; height: 100%; overflow: hidden; background-color: #111318; font-family: sans-serif; touch-action: none; user-select: none; }
+        canvas { display: block; width: 100vw; height: 100vh; }
+        
+        /* Sağ Üst Skor Tablosu */
+        #skorTablosu {
+            position: absolute; top: 15px; right: 15px; color: white;
+            padding: 12px 18px; border-radius: 8px; background: rgba(0, 0, 0, 0.8);
+            z-index: 10; min-width: 190px; pointer-events: none;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.15);
+        }
+        #skorTablosu h3 { font-size: 13px; margin-bottom: 8px; color: #00ffcc; text-transform: uppercase; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 4px; letter-spacing: 1px; }
+        .tablo-satir { display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 4px; }
+
+        /* Sol Üst Mini Harita */
+        #miniHaritaKapsayici {
+            position: absolute; top: 15px; left: 15px; width: 130px; height: 130px;
+            border-radius: 50%; background: rgba(0, 0, 0, 0.75); border: 2px solid #00ffcc;
+            z-index: 10; overflow: hidden; box-shadow: 0 0 15px rgba(0,255,204,0.25); pointer-events: none;
+        }
+        #miniCanvas { width: 100%; height: 100%; display: block; }
+
+        /* Giriş Ekranı */
+        #girisEkrani {
+            position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(10, 12, 18, 0.95); display: flex; flex-direction: column;
+            justify-content: center; align-items: center; z-index: 100;
+        }
+        .giris-kutu {
+            background: #181b24; padding: 25px 30px; border-radius: 14px; text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8); border: 1px solid #00ffcc; width: 390px; max-height: 90vh; overflow-y: auto;
+        }
+        .giris-kutu h1 { color: #00ffcc; margin-bottom: 15px; font-size: 28px; letter-spacing: 2px; }
+        .giris-kutu input[type="text"] {
+            width: 100%; padding: 12px; font-size: 16px; border-radius: 6px; border: 1px solid #00ffcc;
+            outline: none; margin-bottom: 15px; text-align: center; background: #0d0e14; color: white;
+        }
+        .renk-baslik { color: #aaa; font-size: 13px; margin-bottom: 8px; text-align: left; }
+        .renkler-grid {
+            display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 18px;
+        }
+        .renk-topu {
+            width: 32px; height: 32px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; transition: 0.2s;
+        }
+        .renk-topu.secili { border-color: #fff; transform: scale(1.2); box-shadow: 0 0 8px #fff; }
+        
+        .ayar-grup { margin-bottom: 15px; text-align: left; }
+        .ayar-grup label { color: #aaa; font-size: 12px; display: block; margin-bottom: 4px; }
+        .ayar-grup select {
+            width: 100%; padding: 10px; background: #0d0e14; color: white; border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; font-size: 14px; outline: none;
+        }
+        .giris-kutu button {
+            width: 100%; padding: 14px; font-size: 16px; background: #00ffcc; color: #111;
+            font-weight: bold; border: none; border-radius: 6px; cursor: pointer; transition: 0.2s;
+            box-shadow: 0 4px 15px rgba(0,255,204,0.4);
+        }
+        .giris-kutu button:hover { background: #00b38f; }
+
+        /* ÖLÜM Ekrani */
+        #olumEkrani {
+            position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(5, 5, 10, 0.9); display: none; flex-direction: column;
+            justify-content: center; align-items: center; z-index: 200; text-align: center; color: white;
+        }
+        #olumEkrani h2 { font-size: 44px; color: #ff4757; margin-bottom: 10px; text-shadow: 0 0 15px rgba(255,71,87,0.7); }
+        #olumEkrani p { font-size: 18px; margin-bottom: 25px; color: #ccc; }
+        #yenidenBaslaBtn {
+            padding: 12px 30px; font-size: 16px; background: #00ffcc; color: #111;
+            font-weight: bold; border: none; border-radius: 6px; cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0,255,204,0.4);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Giriş Ekranı -->
+    <div id="girisEkrani">
+        <div class="giris-kutu">
+            <h1>SNAKE.IO</h1>
+            <input type="text" id="oyuncuAdiInput" placeholder="Oyuncu İsminiz" maxlength="12" value="Oyuncu">
+            
+            <div class="renk-baslik">Yılan Rengini Seç (20 Benzersiz Renk):</div>
+            <div class="renkler-grid" id="renkPaleti"></div>
+
+            <div class="ayar-grup">
+                <label>Kontrol Türü:</label>
+                <select id="kontrolSecim">
+                    <option value="mouse" selected>Mouse (Fare) / Parmağı Takip Et</option>
+                    <option value="wasd">Klavye (W-A-S-D / Yön Tuşları)</option>
+                    <option value="joystick">Sanal Joystick (Dokunmatik Kol)</option>
+                </select>
+            </div>
+
+            <div class="ayar-grup">
+                <label>Dönüş Hassasiyeti:</label>
+                <select id="hassasiyetSecim">
+                    <option value="0.08">Normal (Dengeli)</option>
+                    <option value="0.12" selected>Hızlı (Akıcı)</option>
+                    <option value="0.18">Çok Keskin</option>
+                </select>
+            </div>
+
+            <button id="baslaBtn">OYUNA BAŞLA</button>
+        </div>
+    </div>
+
+    <!-- Ölüm Ekranı -->
+    <div id="olumEkrani">
+        <h2>Naneyi yedin :)</h2>
+        <p>Topladığın Skor: <span id="sonSkor">0</span></p>
+        <button id="yenidenBaslaBtn">TEKRAR DENE</button>
+    </div>
+
+    <!-- Sağ Üst Skor Tablosu -->
+    <div id="skorTablosu">
+        <h3>Liderlik Tablosu</h3>
+        <div id="tabloIcerik"></div>
+    </div>
+
+    <!-- Sol Üst Mini Harita -->
+    <div id="miniHaritaKapsayici" style="display: none;">
+        <canvas id="miniCanvas" width="130" height="130"></canvas>
+    </div>
+
+    <canvas id="oyunAlani" style="display: none;"></canvas>
+
+    <script>
+        const canvas = document.getElementById("oyunAlani");
+        const ctx = canvas.getContext("2d");
+        const miniCanvas = document.getElementById("miniCanvas");
+        const miniCtx = miniCanvas.getContext("2d");
+        const miniHaritaKapsayici = document.getElementById("miniHaritaKapsayici");
+        const skorTablosuIcerik = document.getElementById("tabloIcerik");
+        const girisEkrani = document.getElementById("girisEkrani");
+        const olumEkrani = document.getElementById("olumEkrani");
+        const sonSkorElementi = document.getElementById("sonSkor");
+        const oyuncuAdiInput = document.getElementById("oyuncuAdiInput");
+        const hassasiyetSecim = document.getElementById("hassasiyetSecim");
+        const kontrolSecim = document.getElementById("kontrolSecim");
+        const baslaBtn = document.getElementById("baslaBtn");
+        const yenidenBaslaBtn = document.getElementById("yenidenBaslaBtn");
+        const renkPaleti = document.getElementById("renkPaleti");
+
+        let oyuncuAdi = "Oyuncu";
+        let oyunBasladi = false;
+        let hassasiyet = 0.12;
+        let kontrolModu = "mouse";
+
+        // 20 ADET TAMAMEN BENZERSİZ RENK LİSTESİ
+        const renkListesi = [
+            { bas: "#00d8d6", govde: "#05c46b" }, // 1. Neon Turkuaz / Nane
+            { bas: "#ff3f34", govde: "#d2dae2" }, // 2. Koyu Kırmızı / Gri
+            { bas: "#0be881", govde: "#1e272e" }, // 3. Fıstık Yeşili / Siyah
+            { bas: "#ffd32a", govde: "#ff3f34" }, // 4. Altın Sarısı / Kırmızı
+            { bas: "#be2edd", govde: "#4834d4" }, // 5. Gece Moru
+            { bas: "#ffffff", govde: "#d2dae2" }, // 6. Saf Beyaz / Gümüş
+            { bas: "#1e272e", govde: "#485460" }, // 7. Kömür Siyahı
+            { bas: "#ffdd59", govde: "#05c46b" }, // 8. Limon Sarı / Yeşil
+            { bas: "#ff5e57", govde: "#ffa801" }, // 9. Turuncu / Mercan
+            { bas: "#3c40c6", govde: "#00d8d6" }, // 10. Derin Mavi
+            { bas: "#f53b57", govde: "#3c40c6" }, // 11. Magenta / Mor
+            { bas: "#686de0", govde: "#e056fd" }, // 12. Lavanta
+            { bas: "#2ed573", govde: "#ffd32a" }, // 13. Zümrüt / Sarı
+            { bas: "#ff7f50", govde: "#2ed573" }, // 14. Şeftali
+            { bas: "#17c0eb", govde: "#fff200" }, // 15. Buz Mavi / Sarı
+            { bas: "#c44569", govde: "#f8a5c2" }, // 16. Koyu Gül / Pembe
+            { bas: "#e1b12c", govde: "#44bd32" }, // 17. Hardal / Yeşil
+            { bas: "#8c7ae6", govde: "#2f3640" }, // 18. Leylak / Koyu
+            { bas: "#00a8ff", govde: "#9c88ff" }, // 19. Gökyüzü Mavi
+            { bas: "#eb4d4b", govde: "#130f40" }  // 20. Alacalı Kırmızı-Siyah
+        ];
+
+        let secilenRenkIndex = 0;
+
+        renkListesi.forEach((renk, i) => {
+            let div = document.createElement("div");
+            div.className = "renk-topu" + (i === 0 ? " secili" : "");
+            div.style.background = `linear-gradient(135deg, ${renk.bas}, ${renk.govde})`;
+            div.addEventListener("click", () => {
+                document.querySelectorAll(".renk-topu").forEach(t => t.classList.remove("secili"));
+                div.classList.add("secili");
+                secilenRenkIndex = i;
+            });
+            renkPaleti.appendChild(div);
+        });
+
+        function ekranBoyutlandir() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        ekranBoyutlandir();
+        window.addEventListener("resize", ekranBoyutlandir);
+
+        const harita = { w: 4000, h: 4000 };
+        let hedef = { x: canvas.width / 2, y: canvas.height / 2 };
+        let hizlanmaAktif = false;
+
+        // Joystick Değişkenleri
+        let joystickAktif = false;
+        let joystickMerkez = { x: 0, y: 0 };
+        let joystickMevcut = { x: 0, y: 0 };
+
+        // Klavye WASD Değişkenleri
+        let tuslar = { w: false, a: false, s: false, d: false };
+
+        window.addEventListener("keydown", (e) => {
+            if (e.code === "Space") hizlanmaAktif = true;
+            if (e.code === "KeyW" || e.code === "ArrowUp") tuslar.w = true;
+            if (e.code === "KeyA" || e.code === "ArrowLeft") tuslar.a = true;
+            if (e.code === "KeyS" || e.code === "ArrowDown") tuslar.s = true;
+            if (e.code === "KeyD" || e.code === "ArrowRight") tuslar.d = true;
+        });
+
+        window.addEventListener("keyup", (e) => {
+            if (e.code === "Space") hizlanmaAktif = false;
+            if (e.code === "KeyW" || e.code === "ArrowUp") tuslar.w = false;
+            if (e.code === "KeyA" || e.code === "ArrowLeft") tuslar.a = false;
+            if (e.code === "KeyS" || e.code === "ArrowDown") tuslar.s = false;
+            if (e.code === "KeyD" || e.code === "ArrowRight") tuslar.d = false;
+        });
+
+        // Mouse Kontrolü
+        window.addEventListener("mousemove", (e) => {
+            if (kontrolModu === "mouse") {
+                hedef.x = e.clientX;
+                hedef.y = e.clientY;
+            }
+        });
+
+        // Dokunmatik ve Joystick Kontrolleri
+        window.addEventListener("touchstart", (e) => {
+            if (e.touches.length > 0) {
+                let touch = e.touches[0];
+                if (kontrolModu === "joystick") {
+                    joystickAktif = true;
+                    joystickMerkez = { x: touch.clientX, y: touch.clientY };
+                    joystickMevcut = { x: touch.clientX, y: touch.clientY };
+                } else if (kontrolModu === "mouse") {
+                    hedef.x = touch.clientX;
+                    hedef.y = touch.clientY;
+                }
+            }
+        }, { passive: true });
+
+        window.addEventListener("touchmove", (e) => {
+            if (e.touches.length > 0) {
+                let touch = e.touches[0];
+                if (kontrolModu === "joystick" && joystickAktif) {
+                    joystickMevcut = { x: touch.clientX, y: touch.clientY };
+                    let dx = joystickMevcut.x - joystickMerkez.x;
+                    let dy = joystickMevcut.y - joystickMerkez.y;
+                    hedef.x = canvas.width / 2 + dx * 3;
+                    hedef.y = canvas.height / 2 + dy * 3;
+                } else if (kontrolModu === "mouse") {
+                    hedef.x = touch.clientX;
+                    hedef.y = touch.clientY;
+                }
+            }
+        }, { passive: true });
+
+        window.addEventListener("touchend", () => {
+            joystickAktif = false;
+        });
+
+        window.addEventListener("mousedown", (e) => { if (e.button === 2) hizlanmaAktif = true; });
+        window.addEventListener("mouseup", (e) => { if (e.button === 2) hizlanmaAktif = false; });
+        window.addEventListener("contextmenu", (e) => e.preventDefault());
+
+        let yilan;
+        let yemler = [];
+        let botlar = [];
+
+        function yeniYemOlustur() {
+            let rand = Math.random();
+            let tip, yaricap, puan, renk;
+
+            if (rand < 0.6) {
+                tip = "kucuk"; yaricap = 4; puan = 3; renk = "#2ed573";
+            } else if (rand < 0.88) {
+                tip = "orta"; yaricap = 7; puan = 7; renk = "#ffa502";
+            } else {
+                tip = "buyuk"; yaricap = 12; puan = 13; renk = "#ff4757";
+            }
+
+            return {
+                x: Math.random() * (harita.w - 200) + 100,
+                y: Math.random() * (harita.h - 200) + 100,
+                yaricap: yaricap,
+                puan: puan,
+                renk: renk,
+                tip: tip
+            };
+        }
+
+        function oyunuSifirla() {
+            let r = renkListesi[secilenRenkIndex];
+            yilan = {
+                x: harita.w / 2,
+                y: harita.h / 2,
+                aci: 0,
+                yaricap: 16,
+                hiz: 3.8,
+                hizlanmaHizi: 7.2,
+                parcalar: [],
+                uzunluk: 30,
+                skor: 0,
+                basRengi: r.bas,
+                govdeRengi: r.govde
+            };
+
+            for (let i = 0; i < yilan.uzunluk; i++) {
+                yilan.parcalar.push({ x: yilan.x - i * 4, y: yilan.y });
+            }
+
+            yemler = [];
+            for (let i = 0; i < 550; i++) {
+                yemler.push(yeniYemOlustur());
+            }
+
+            const botIsimleri = ["Viper", "Shadow", "Cobra", "Python", "Alpha", "Slayer", "Titan", "Phantom"];
+            botlar = [];
+            for(let i=0; i<8; i++) {
+                let botRenk = renkListesi[Math.floor(Math.random() * renkListesi.length)];
+                let bx = Math.random() * (harita.w - 600) + 300;
+                let by = Math.random() * (harita.h - 600) + 300;
+                let b = {
+                    isim: botIsimleri[i % botIsimleri.length],
+                    x: bx, y: by, aci: Math.random() * Math.PI*2,
+                    yaricap: 16, hiz: 3.5, parcalar: [], uzunluk: 25 + i*5,
+                    skor: 100 + i*30, basRengi: botRenk.bas, govdeRengi: botRenk.govde
+                };
+                for(let j=0; j<b.uzunluk; j++) {
+                    b.parcalar.push({ x: bx - j*4, y: by });
+                }
+                botlar.push(b);
+            }
+        }
+
+        baslaBtn.addEventListener("click", () => {
+            let girilenIsim = oyuncuAdiInput.value.trim();
+            if (girilenIsim !== "") oyuncuAdi = girilenIsim;
+            hassasiyet = parseFloat(hassasiyetSecim.value);
+            kontrolModu = kontrolSecim.value;
+
+            oyunuSifirla();
+            girisEkrani.style.display = "none";
+            olumEkrani.style.display = "none";
+            canvas.style.display = "block";
+            miniHaritaKapsayici.style.display = "block";
+            oyunBasladi = true;
+            oyunDongusu();
+        });
+
+        yenidenBaslaBtn.addEventListener("click", () => {
+            oyunuSifirla();
+            olumEkrani.style.display = "none";
+            canvas.style.display = "block";
+            miniHaritaKapsayici.style.display = "block";
+            oyunBasladi = true;
+            oyunDongusu();
+        });
+
+        function orijinalYilanCiz(parcalar, yaricap, basRengi, govdeRengi, isOyuncu, basAci, isim) {
+            for (let i = parcalar.length - 1; i >= 0; i--) {
+                let p = parcalar[i];
+                let cx = p.x - (yilan.x - canvas.width / 2);
+                let cy = p.y - (yilan.y - canvas.height / 2);
+
+                if (cx >= -40 && cx <= canvas.width + 40 && cy >= -40 && cy <= canvas.height + 40) {
+                    ctx.save();
+                    ctx.translate(cx, cy);
+
+                    if (i === 0) {
+                        let yon = isOyuncu ? yilan.aci : basAci;
+                        ctx.rotate(yon);
+
+                        ctx.fillStyle = basRengi;
+                        ctx.beginPath(); ctx.arc(0, 0, yaricap, 0, Math.PI * 2); ctx.fill();
+
+                        ctx.strokeStyle = "rgba(0,0,0,0.4)";
+                        ctx.lineWidth = 2;
+                        ctx.stroke();
+
+                        let gozR = yaricap * 0.38;
+                        let bebekR = gozR * 0.55;
+
+                        ctx.fillStyle = "#ffffff";
+                        ctx.beginPath(); ctx.arc(yaricap*0.4, -yaricap*0.45, gozR, 0, Math.PI*2); ctx.fill();
+                        ctx.strokeStyle = "#000"; ctx.lineWidth = 1; ctx.stroke();
+                        ctx.fillStyle = "#000000";
+                        ctx.beginPath(); ctx.arc(yaricap*0.5, -yaricap*0.45, bebekR, 0, Math.PI*2); ctx.fill();
+
+                        ctx.fillStyle = "#ffffff";
+                        ctx.beginPath(); ctx.arc(yaricap*0.4, yaricap*0.45, gozR, 0, Math.PI*2); ctx.fill();
+                        ctx.strokeStyle = "#000"; ctx.lineWidth = 1; ctx.stroke();
+                        ctx.fillStyle = "#000000";
+                        ctx.beginPath(); ctx.arc(yaricap*0.5, yaricap*0.45, bebekR, 0, Math.PI*2); ctx.fill();
+
+                    } else {
+                        ctx.fillStyle = govdeRengi;
+                        ctx.beginPath(); ctx.arc(0, 0, yaricap * 0.95, 0, Math.PI * 2); ctx.fill();
+
+                        ctx.strokeStyle = "rgba(0,0,0,0.15)";
+                        ctx.lineWidth = 1.5;
+                        ctx.stroke();
+                    }
+
+                    ctx.restore();
+                }
+            }
+
+            let basP = parcalar[0];
+            let bkx = basP.x - (yilan.x - canvas.width / 2);
+            let bky = basP.y - (yilan.y - canvas.height / 2);
+            ctx.fillStyle = "#fff";
+            ctx.font = "bold 13px sans-serif";
+            ctx.textAlign = "center";
+            ctx.shadowColor = "#000"; ctx.shadowBlur = 4;
+            ctx.fillText(isim, bkx, bky - 22);
+            ctx.shadowBlur = 0;
+        }
+
+        function hexIzgaraCiz(kameraX, kameraY) {
+            ctx.fillStyle = "#0f1117";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            let hexBoyut = 35;
+            let a = hexBoyut * 1.5;
+            let b = hexBoyut * Math.sqrt(3);
+
+            ctx.strokeStyle = "#1b1e29";
+            ctx.lineWidth = 2;
+
+            let startX = Math.floor(kameraX / a) - 2;
+            let endX = Math.ceil((kameraX + canvas.width) / a) + 2;
+            let startY = Math.floor(kameraY / b) - 2;
+            let endY = Math.ceil((kameraY + canvas.height) / b) + 2;
+
+            for (let i = startX; i < endX; i++) {
+                for (let j = startY; j < endY; j++) {
+                    let cx = i * a - kameraX;
+                    let cy = j * b + (i % 2 === 0 ? 0 : b / 2) - kameraY;
+
+                    ctx.beginPath();
+                    for (let k = 0; k < 6; k++) {
+                        let aci = Math.PI / 3 * k;
+                        let x = cx + hexBoyut * Math.cos(aci);
+                        let y = cy + hexBoyut * Math.sin(aci);
+                        if (k === 0) ctx.moveTo(x, y);
+                        else ctx.lineTo(x, y);
+                    }
+                    ctx.closePath();
+                    ctx.stroke();
+                }
+            }
+        }
+
+        function miniHaritaCiz() {
+            miniCtx.clearRect(0, 0, miniCanvas.width, miniCanvas.height);
+            miniCtx.fillStyle = "rgba(10, 12, 18, 0.9)";
+            miniCtx.fillRect(0, 0, miniCanvas.width, miniCanvas.height);
+
+            let olcek = miniCanvas.width / harita.w;
+
+            botlar.forEach(bot => {
+                miniCtx.fillStyle = "#ff4757";
+                miniCtx.beginPath(); miniCtx.arc(bot.x * olcek, bot.y * olcek, 2.5, 0, Math.PI*2); miniCtx.fill();
+            });
+
+            miniCtx.fillStyle = "#00ffcc";
+            miniCtx.beginPath(); miniCtx.arc(yilan.x * olcek, yilan.y * olcek, 4, 0, Math.PI*2); miniCtx.fill();
+        }
+
+        // Sanal Joystick Görselini Çiz
+        function joystickCiz() {
+            if (kontrolModu === "joystick" && joystickAktif) {
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(joystickMerkez.x, joystickMerkez.y, 45, 0, Math.PI * 2);
+                ctx.fillStyle = "rgba(0, 255, 204, 0.15)";
+                ctx.fill();
+                ctx.strokeStyle = "rgba(0, 255, 204, 0.5)";
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.arc(joystickMevcut.x, joystickMevcut.y, 20, 0, Math.PI * 2);
+                ctx.fillStyle = "#00ffcc";
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        function oyunDongusu() {
+            if (!oyunBasladi) return;
+
+            let hedefAci = yilan.aci;
+
+            // Kontrol Moduna Göre Yön Hesaplama
+            if (kontrolModu === "wasd") {
+                let kx = 0, ky = 0;
+                if (tuslar.w) ky -= 1;
+                if (tuslar.s) ky += 1;
+                if (tuslar.a) kx -= 1;
+                if (tuslar.d) kx += 1;
+
+                if (kx !== 0 || ky !== 0) {
+                    hedefAci = Math.atan2(ky, kx);
+                }
+            } else {
+                let dx = hedef.x - canvas.width / 2;
+                let dy = hedef.y - canvas.height / 2;
+                hedefAci = Math.atan2(dy, dx);
+            }
+
+            let aciFarki = hedefAci - yilan.aci;
+            while (aciFarki < -Math.PI) aciFarki += Math.PI * 2;
+            while (aciFarki > Math.PI) aciFarki -= Math.PI * 2;
+            yilan.aci += aciFarki * hassasiyet;
+
+            let aktifHiz = yilan.hiz;
+            if (hizlanmaAktif && yilan.skor > 10) {
+                aktifHiz = yilan.hizlanmaHizi;
+                yilan.skor -= 0.15;
+                if (Math.random() < 0.4) {
+                    let sonParca = yilan.parcalar[yilan.parcalar.length - 1];
+                    yemler.push({ x: sonParca.x, y: sonParca.y, yaricap: 5, puan: 3, renk: "#2ed573", tip: "kucuk" });
+                }
+            }
+
+            yilan.x += Math.cos(yilan.aci) * aktifHiz;
+            yilan.y += Math.sin(yilan.aci) * aktifHiz;
+
+            if (yilan.x < 50 || yilan.x > harita.w - 50 || yilan.y < 50 || yilan.y > harita.h - 50) {
+                oyunBitir();
+                return;
+            }
+
+            yilan.parcalar.unshift({ x: yilan.x, y: yilan.y });
+            if (yilan.parcalar.length > yilan.uzunluk) {
+                yilan.parcalar.pop();
+            }
+
+            // Yem Yeme
+            for (let i = yemler.length - 1; i >= 0; i--) {
+                let yem = yemler[i];
+                if (Math.hypot(yilan.x - yem.x, yilan.y - yem.y) < yilan.yaricap + yem.yaricap) {
+                    yilan.skor += yem.puan;
+                    yilan.uzunluk = Math.floor(30 + yilan.skor / 3);
+                    yemler.splice(i, 1);
+                    yemler.push(yeniYemOlustur());
+                }
+            }
+
+            // Botlar ve Çarpmalar
+            for (let bIndex = botlar.length - 1; bIndex >= 0; bIndex--) {
+                let bot = botlar[bIndex];
+
+                if (Math.random() < 0.03) bot.aci += (Math.random() - 0.5) * 1.5;
+                bot.x += Math.cos(bot.aci) * bot.hiz;
+                bot.y += Math.sin(bot.aci) * bot.hiz;
+
+                if (bot.x < 100 || bot.x > harita.w - 100) bot.aci = Math.PI - bot.aci;
+                if (bot.y < 100 || bot.y > harita.h - 100) bot.aci = -bot.aci;
+
+                bot.parcalar.unshift({ x: bot.x, y: bot.y });
+                if (bot.parcalar.length > bot.uzunluk) bot.parcalar.pop();
+
+                for (let i = yemler.length - 1; i >= 0; i--) {
+                    let yem = yemler[i];
+                    if (Math.hypot(bot.x - yem.x, bot.y - yem.y) < bot.yaricap + yem.yaricap) {
+                        bot.skor += yem.puan;
+                        bot.uzunluk = Math.floor(25 + bot.skor / 3);
+                        yemler.splice(i, 1);
+                    }
+                }
+
+                // 1. Sen bota çarparsan SEN ölürsün
+                for (let p of bot.parcalar) {
+                    if (Math.hypot(yilan.x - p.x, yilan.y - p.y) < yilan.yaricap * 0.8) {
+                        oyunBitir();
+                        return;
+                    }
+                }
+
+                // 2. Bot senin kuyruğuna çarparsa BOT ÖLÜR
+                let botOlduMu = false;
+                for (let i = 4; i < yilan.parcalar.length; i++) {
+                    let p = yilan.parcalar[i];
+                    if (Math.hypot(bot.x - p.x, bot.y - p.y) < bot.yaricap) {
+                        botOlduMu = true;
+                        break;
+                    }
+                }
+
+                if (botOlduMu) {
+                    bot.parcalar.forEach(p => {
+                        yemler.push({ x: p.x, y: p.y, yaricap: 8, puan: 7, renk: "#ffa502", tip: "orta" });
+                    });
+                    let botRenk = renkListesi[Math.floor(Math.random() * renkListesi.length)];
+                    botlar[bIndex] = {
+                        isim: bot.isim,
+                        x: Math.random() * (harita.w - 1000) + 500,
+                        y: Math.random() * (harita.h - 1000) + 500,
+                        aci: Math.random() * Math.PI * 2,
+                        yaricap: 16, hiz: 3.5, parcalar: [], uzunluk: 25, skor: 100,
+                        basRengi: botRenk.bas, govdeRengi: botRenk.govde
+                    };
+                    for (let i = 0; i < 25; i++) {
+                        botlar[bIndex].parcalar.push({ x: botlar[bIndex].x - i * 4, y: botlar[bIndex].y });
+                    }
+                }
+            }
+
+            let tumOyuncular = [...botlar, { isim: oyuncuAdi, skor: Math.floor(yilan.skor) }];
+            tumOyuncular.sort((a, b) => b.skor - a.skor);
+
+            skorTablosuIcerik.innerHTML = "";
+            tumOyuncular.slice(0, 5).forEach((oyuncu, index) => {
+                let satir = document.createElement("div");
+                satir.className = "tablo-satir";
+                satir.innerHTML = `<span>${index + 1}. ${oyuncu.isim}</span> <b>${oyuncu.skor}</b>`;
+                if (oyuncu.isim === oyuncuAdi) satir.style.color = "#00ffcc";
+                skorTablosuIcerik.appendChild(satir);
+            });
+
+            let kameraX = yilan.x - canvas.width / 2;
+            let kameraY = yilan.y - canvas.height / 2;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            hexIzgaraCiz(kameraX, kameraY);
+
+            ctx.strokeStyle = "#ff4757";
+            ctx.lineWidth = 8;
+            ctx.shadowColor = "#ff4757"; ctx.shadowBlur = 15;
+            ctx.strokeRect(-kameraX + 50, -kameraY + 50, harita.w - 100, harita.h - 100);
+            ctx.shadowBlur = 0;
+
+            yemler.forEach(yem => {
+                let cx = yem.x - kameraX, cy = yem.y - kameraY;
+                if (cx >= -30 && cx <= canvas.width + 30 && cy >= -30 && cy <= canvas.height + 30) {
+                    ctx.fillStyle = yem.renk;
+                    ctx.shadowColor = yem.renk;
+                    ctx.shadowBlur = yem.tip === "buyuk" ? 12 : 5;
+                    ctx.beginPath(); ctx.arc(cx, cy, yem.yaricap, 0, Math.PI * 2); ctx.fill();
+                    ctx.shadowBlur = 0;
+                }
+            });
+
+            botlar.forEach(bot => {
+                orijinalYilanCiz(bot.parcalar, bot.yaricap, bot.basRengi, bot.govdeRengi, false, bot.aci, bot.isim);
+            });
+
+            orijinalYilanCiz(yilan.parcalar, yilan.yaricap, yilan.basRengi, yilan.govdeRengi, true, yilan.aci, oyuncuAdi);
+
+            joystickCiz();
+            miniHaritaCiz();
+
+            requestAnimationFrame(oyunDongusu);
+        }
+
+        function oyunBitir() {
+            oyunBasladi = false;
+            canvas.style.display = "none";
+            miniHaritaKapsayici.style.display = "none";
+            sonSkorElementi.innerText = Math.floor(yilan.skor);
+            olumEkrani.style.display = "flex";
+
+            yilan.parcalar.forEach(p => {
+                yemler.push({ x: p.x, y: p.y, yaricap: 8, puan: 7, renk: "#ffa502", tip: "orta" });
+            });
+        }
+    </script>
+</body>
+</html>
